@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="TramTracker.Widget.TramWidgetContent"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Border x:Name="RootBorder"
+            Background="Transparent"
+            Padding="0,4">
+        <Border x:Name="HoverBorder"
+                Background="Transparent"
+                CornerRadius="4"
+                Padding="4,2">
+        <ToolTipService.ToolTip>
+            <ToolTip x:Name="StatusToolTip" Content="Loading..." />
+        </ToolTipService.ToolTip>
+
+        <Grid VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="6" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Route visualization with stops and vehicle -->
+            <Canvas x:Name="RouteCanvas"
+                    Grid.Column="0"
+                    Width="36"
+                    Height="20"
+                    VerticalAlignment="Center" />
+
+            <!-- Line badge and arrival time -->
+            <StackPanel Grid.Column="2"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Center"
+                        Spacing="4">
+
+                <!-- Line number badge -->
+                <Border x:Name="LineBadge"
+                        Background="#FFD700"
+                        CornerRadius="2"
+                        Padding="4,1"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="LineText"
+                               Text="--"
+                               FontSize="11"
+                               FontWeight="Bold"
+                               Foreground="Black" />
+                </Border>
+
+                <!-- Arrival time -->
+                <TextBlock x:Name="ArrivalText"
+                           Text="--"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Foreground="White"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+        </Grid>
+        </Border>
+    </Border>
+</UserControl>
