@@ -7,4 +7,5 @@ public class AppConfig
     public string? Direction { get; set; } = null;
     public int RefreshIntervalSeconds { get; set; } = 30;
     public int DepartureLimit { get; set; } = 5;
+    public string? ApiKey { get; set; } = null;
 }

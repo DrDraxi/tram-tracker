@@ -19,7 +19,7 @@ public class GolemioService : IGolemioService
     public GolemioService(SettingsService settings)
     {
         _settings = settings;
-        _apiKey = EnvService.Get("GOLEMIO_API_KEY") ?? "";
+        _apiKey = EnvService.Get("GOLEMIO_API_KEY") ?? settings.Config.ApiKey ?? "";
 
         _httpClient = new HttpClient();
         _httpClient.DefaultRequestHeaders.Add("x-access-token", _apiKey);
