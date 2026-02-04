@@ -60,10 +60,10 @@ public class GolemioService : IGolemioService
                 return;
             }
 
-            // Find the first matching departure based on config
-            var departure = FindMatchingDeparture(data.Departures, trackingConfig);
+            // Find matching departures based on config
+            var matchingDepartures = FindMatchingDepartures(data.Departures, trackingConfig).ToList();
 
-            if (departure == null)
+            if (matchingDepartures.Count == 0)
             {
                 // Build helpful error message showing what we're looking for
                 var looking = new List<string>();
@@ -85,7 +85,10 @@ public class GolemioService : IGolemioService
                 return;
             }
 
-            var state = TramState.FromDeparture(departure);
+            var currentDeparture = matchingDepartures[0];
+            var nextDeparture = matchingDepartures.Count > 1 ? matchingDepartures[1] : null;
+
+            var state = TramState.FromDeparture(currentDeparture, nextDeparture);
             UpdateState(state);
         }
         catch (HttpRequestException ex)
@@ -111,7 +114,7 @@ public class GolemioService : IGolemioService
         return builder.ToString();
     }
 
-    private Departure? FindMatchingDeparture(List<Departure> departures, TrackingConfig trackingConfig)
+    private IEnumerable<Departure> FindMatchingDepartures(List<Departure> departures, TrackingConfig trackingConfig)
     {
         IEnumerable<Departure> filtered = departures;
 
@@ -129,8 +132,8 @@ public class GolemioService : IGolemioService
                 d.Trip?.Headsign?.Contains(trackingConfig.Direction, StringComparison.OrdinalIgnoreCase) == true);
         }
 
-        // Return the first matching departure (already sorted by time from API)
-        return filtered.FirstOrDefault();
+        // Return all matching departures (already sorted by time from API)
+        return filtered;
     }
 
     private void UpdateState(TramState state)

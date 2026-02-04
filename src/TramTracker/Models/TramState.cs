@@ -7,6 +7,7 @@ public class TramState
     public int MinutesToArrival { get; set; } = -1;
     public int? DelayMinutes { get; set; }
     public DateTime? PredictedArrival { get; set; }
+    public int? NextMinutesToArrival { get; set; }
     public DateTime LastUpdated { get; set; } = DateTime.MinValue;
     public string? ErrorMessage { get; set; }
 
@@ -54,6 +55,12 @@ public class TramState
                 lines.Add($"Delay: +{DelayMinutes.Value}min");
             }
 
+            if (NextMinutesToArrival.HasValue)
+            {
+                var nextFormatted = NextMinutesToArrival.Value == 0 ? "<1m" : $"{NextMinutesToArrival.Value}m";
+                lines.Add($"Next in: {nextFormatted}");
+            }
+
             if (LastUpdated != DateTime.MinValue)
             {
                 lines.Add($"Updated: {LastUpdated:HH:mm:ss}");
@@ -63,7 +70,7 @@ public class TramState
         }
     }
 
-    public static TramState FromDeparture(Departure departure)
+    public static TramState FromDeparture(Departure departure, Departure? nextDeparture = null)
     {
         var state = new TramState
         {
@@ -79,6 +86,12 @@ public class TramState
             var diff = departure.DepartureTimestamp.Predicted.Value - DateTime.Now;
             state.MinutesToArrival = Math.Max(0, (int)diff.TotalMinutes);
             state.VehiclePosition = CalculateVehiclePosition(state.MinutesToArrival);
+        }
+
+        if (nextDeparture?.DepartureTimestamp?.Predicted.HasValue == true)
+        {
+            var nextDiff = nextDeparture.DepartureTimestamp.Predicted.Value - DateTime.Now;
+            state.NextMinutesToArrival = Math.Max(0, (int)nextDiff.TotalMinutes);
         }
 
         return state;
