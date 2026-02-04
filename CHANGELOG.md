@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v1.1.0] - 2026-02-04
+
+### Added
+- Time-based configuration system allowing different stations/lines at different times of day
+- Support for time windows (e.g., track line 12 from 10:00-16:00, line 17 from 16:00-23:59)
+- Midnight-crossing time windows (e.g., 22:00-02:00 for night service)
+- Dynamic configuration reloading without app restart
+- Configuration changes take effect automatically on next refresh cycle (default 30 seconds)
+- Automatic refresh interval adjustment when changed in config
+- Configuration validation with debug warnings for invalid time formats
+- Example configuration files (config.example.json and config.legacy.example.json)
+
+### Changed
+- Configuration is now reloaded on every API call to pick up changes immediately
+- Refresh timer automatically adjusts when RefreshIntervalSeconds is changed
+
 ## [v1.0.1] - 2026-02-03
 
 ### Added
