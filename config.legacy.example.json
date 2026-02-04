@@ -1,0 +1,8 @@
+{
+  "StationName": "Kobylisy",
+  "LineNumber": "17",
+  "Direction": null,
+  "RefreshIntervalSeconds": 30,
+  "DepartureLimit": 5,
+  "ApiKey": "your_api_key_here"
+}

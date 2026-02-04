@@ -54,6 +54,18 @@ public partial class App : Application
         try
         {
             await Task.Run(async () => await _golemioService.FetchDeparturesAsync());
+
+            // Check if refresh interval changed and restart timer if needed
+            var currentInterval = _settings.Config.RefreshIntervalSeconds;
+            if (currentInterval <= 0) currentInterval = 30;
+
+            if (_refreshTimer != null && _refreshTimer.Interval.TotalSeconds != currentInterval)
+            {
+                System.Diagnostics.Debug.WriteLine($"Refresh interval changed to {currentInterval}s, restarting timer");
+                _refreshTimer.Stop();
+                _refreshTimer.Interval = TimeSpan.FromSeconds(currentInterval);
+                _refreshTimer.Start();
+            }
         }
         catch (Exception ex)
         {

@@ -1,0 +1,26 @@
+{
+  "ApiKey": "your_api_key_here",
+  "RefreshIntervalSeconds": 30,
+  "DepartureLimit": 5,
+  "TimeWindows": [
+    {
+      "StartTime": "10:00",
+      "EndTime": "16:00",
+      "StationName": "Chotkovy sady",
+      "LineNumber": "12",
+      "Direction": "Lehovec"
+    },
+    {
+      "StartTime": "16:00",
+      "EndTime": "23:59",
+      "StationName": "Malostranská",
+      "LineNumber": "17",
+      "Direction": "Vozovna Kobylisy"
+    }
+  ],
+  "DefaultConfig": {
+    "StationName": "Kobylisy",
+    "LineNumber": "17",
+    "Direction": null
+  }
+}

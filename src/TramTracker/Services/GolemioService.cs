@@ -29,14 +29,17 @@ public class GolemioService : IGolemioService
     {
         try
         {
+            // Reload config on each fetch to pick up changes without restart
+            _settings.LoadConfig();
+
             if (string.IsNullOrEmpty(_apiKey))
             {
                 UpdateState(TramState.Error("API key not configured"));
                 return;
             }
 
-            var config = _settings.Config;
-            var url = BuildUrl(config);
+            var trackingConfig = _settings.ActiveTrackingConfig;
+            var url = BuildUrl(trackingConfig.StationName, _settings.Config.DepartureLimit);
 
             System.Diagnostics.Debug.WriteLine($"Fetching: {url}");
 
@@ -58,16 +61,16 @@ public class GolemioService : IGolemioService
             }
 
             // Find the first matching departure based on config
-            var departure = FindMatchingDeparture(data.Departures, config);
+            var departure = FindMatchingDeparture(data.Departures, trackingConfig);
 
             if (departure == null)
             {
                 // Build helpful error message showing what we're looking for
                 var looking = new List<string>();
-                if (!string.IsNullOrEmpty(config.LineNumber))
-                    looking.Add($"line {config.LineNumber}");
-                if (!string.IsNullOrEmpty(config.Direction))
-                    looking.Add($"dir '{config.Direction}'");
+                if (!string.IsNullOrEmpty(trackingConfig.LineNumber))
+                    looking.Add($"line {trackingConfig.LineNumber}");
+                if (!string.IsNullOrEmpty(trackingConfig.Direction))
+                    looking.Add($"dir '{trackingConfig.Direction}'");
 
                 var available = data.Departures
                     .Select(d => $"{d.Route?.ShortName}→{d.Trip?.Headsign}")
@@ -95,35 +98,35 @@ public class GolemioService : IGolemioService
         }
     }
 
-    private string BuildUrl(AppConfig config)
+    private string BuildUrl(string stationName, int departureLimit)
     {
         var builder = new UriBuilder(BaseUrl);
         var query = HttpUtility.ParseQueryString(string.Empty);
 
-        query["names"] = config.StationName;
-        query["limit"] = config.DepartureLimit.ToString();
+        query["names"] = stationName;
+        query["limit"] = departureLimit.ToString();
         query["preferredTimezone"] = "Europe/Prague";
 
         builder.Query = query.ToString();
         return builder.ToString();
     }
 
-    private Departure? FindMatchingDeparture(List<Departure> departures, AppConfig config)
+    private Departure? FindMatchingDeparture(List<Departure> departures, TrackingConfig trackingConfig)
     {
         IEnumerable<Departure> filtered = departures;
 
         // Filter by line number if specified
-        if (!string.IsNullOrEmpty(config.LineNumber))
+        if (!string.IsNullOrEmpty(trackingConfig.LineNumber))
         {
             filtered = filtered.Where(d =>
-                d.Route?.ShortName?.Equals(config.LineNumber, StringComparison.OrdinalIgnoreCase) == true);
+                d.Route?.ShortName?.Equals(trackingConfig.LineNumber, StringComparison.OrdinalIgnoreCase) == true);
         }
 
         // Filter by direction (headsign) if specified
-        if (!string.IsNullOrEmpty(config.Direction))
+        if (!string.IsNullOrEmpty(trackingConfig.Direction))
         {
             filtered = filtered.Where(d =>
-                d.Trip?.Headsign?.Contains(config.Direction, StringComparison.OrdinalIgnoreCase) == true);
+                d.Trip?.Headsign?.Contains(trackingConfig.Direction, StringComparison.OrdinalIgnoreCase) == true);
         }
 
         // Return the first matching departure (already sorted by time from API)
