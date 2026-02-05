@@ -7,7 +7,6 @@ using Microsoft.UI.Xaml.Shapes;
 using TramTracker.Models;
 using TramTracker.Services;
 using Windows.UI;
-using Microsoft.Win32;
 
 namespace TramTracker.Widget;
 
@@ -45,8 +44,8 @@ public sealed partial class TramWidgetContent : UserControl
         DrawRouteVisualization();
         UpdateTextColor();
 
-        // Watch for registry changes to Windows theme
-        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        // Watch for theme changes using WinUI 3's ActualThemeChanged event
+        ActualThemeChanged += OnActualThemeChanged;
     }
 
     private void DrawRouteVisualization()
@@ -212,13 +211,9 @@ public sealed partial class TramWidgetContent : UserControl
         HoverBorder.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
     }
 
-    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
+    private void OnActualThemeChanged(FrameworkElement sender, object args)
     {
-        if (e.Category == UserPreferenceCategory.General)
-        {
-            // Dispatch to UI thread
-            DispatcherQueue.TryEnqueue(UpdateTextColor);
-        }
+        UpdateTextColor();
     }
 
     private void UpdateTextColor()
@@ -236,33 +231,10 @@ public sealed partial class TramWidgetContent : UserControl
         }
         else // "auto" or any other value
         {
-            var isDarkMode = IsSystemInDarkMode();
-            textColor = isDarkMode ? Colors.White : Colors.Black;
+            // Use WinUI 3's ActualTheme property to detect current theme
+            textColor = ActualTheme == ElementTheme.Dark ? Colors.White : Colors.Black;
         }
 
         ArrivalText.Foreground = new SolidColorBrush(textColor);
-    }
-
-    private bool IsSystemInDarkMode()
-    {
-        try
-        {
-            // Check Windows registry for apps theme setting
-            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-            var value = key?.GetValue("AppsUseLightTheme");
-
-            if (value is int intValue)
-            {
-                // 0 = dark mode, 1 = light mode
-                return intValue == 0;
-            }
-        }
-        catch
-        {
-            // If registry read fails, fall back to default
-        }
-
-        // Default to dark mode (white text) if detection fails
-        return true;
     }
 }
