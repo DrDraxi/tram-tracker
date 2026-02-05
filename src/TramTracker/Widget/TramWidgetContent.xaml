@@ -53,7 +53,6 @@
                            Text="--"
                            FontSize="13"
                            FontWeight="SemiBold"
-                           Foreground="White"
                            VerticalAlignment="Center" />
             </StackPanel>
         </Grid>

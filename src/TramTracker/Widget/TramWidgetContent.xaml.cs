@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using TramTracker.Models;
 using Windows.UI;
+using Windows.UI.ViewManagement;
 
 namespace TramTracker.Widget;
 
@@ -26,17 +27,23 @@ public sealed partial class TramWidgetContent : UserControl
     private static readonly Color GreenColor = Color.FromArgb(255, 76, 175, 80);
     private static readonly Color GrayColor = Color.FromArgb(180, 128, 128, 128);
 
+    private readonly UISettings _uiSettings;
+
     public event EventHandler? Clicked;
 
     public TramWidgetContent()
     {
         InitializeComponent();
 
+        _uiSettings = new UISettings();
+        _uiSettings.ColorValuesChanged += OnColorValuesChanged;
+
         HoverBorder.PointerPressed += OnPointerPressed;
         HoverBorder.PointerEntered += OnPointerEntered;
         HoverBorder.PointerExited += OnPointerExited;
 
         DrawRouteVisualization();
+        UpdateTextColor();
     }
 
     private void DrawRouteVisualization()
@@ -197,5 +204,29 @@ public sealed partial class TramWidgetContent : UserControl
     private void OnPointerExited(object sender, PointerRoutedEventArgs e)
     {
         HoverBorder.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
+    }
+
+    private void OnColorValuesChanged(UISettings sender, object args)
+    {
+        // This event fires on a background thread, dispatch to UI thread
+        DispatcherQueue.TryEnqueue(() => UpdateTextColor());
+    }
+
+    private void UpdateTextColor()
+    {
+        var isDarkMode = IsSystemInDarkMode();
+        var textColor = isDarkMode ? Colors.White : Colors.Black;
+        ArrivalText.Foreground = new SolidColorBrush(textColor);
+    }
+
+    private bool IsSystemInDarkMode()
+    {
+        // Check the foreground color - in dark mode it's light, in light mode it's dark
+        var foreground = _uiSettings.GetColorValue(UIColorType.Foreground);
+
+        // Calculate brightness of the foreground color
+        // If foreground is bright (> 128), system is in dark mode
+        var brightness = (foreground.R + foreground.G + foreground.B) / 3.0;
+        return brightness > 128;
     }
 }
