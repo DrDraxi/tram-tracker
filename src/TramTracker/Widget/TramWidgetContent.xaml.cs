@@ -5,8 +5,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using TramTracker.Models;
+using TramTracker.Services;
 using Windows.UI;
-using Windows.UI.ViewManagement;
+using Microsoft.Win32;
 
 namespace TramTracker.Widget;
 
@@ -27,16 +28,15 @@ public sealed partial class TramWidgetContent : UserControl
     private static readonly Color GreenColor = Color.FromArgb(255, 76, 175, 80);
     private static readonly Color GrayColor = Color.FromArgb(180, 128, 128, 128);
 
-    private readonly UISettings _uiSettings;
+    private readonly SettingsService _settings;
 
     public event EventHandler? Clicked;
 
-    public TramWidgetContent()
+    public TramWidgetContent(SettingsService settings)
     {
         InitializeComponent();
 
-        _uiSettings = new UISettings();
-        _uiSettings.ColorValuesChanged += OnColorValuesChanged;
+        _settings = settings;
 
         HoverBorder.PointerPressed += OnPointerPressed;
         HoverBorder.PointerEntered += OnPointerEntered;
@@ -44,6 +44,9 @@ public sealed partial class TramWidgetContent : UserControl
 
         DrawRouteVisualization();
         UpdateTextColor();
+
+        // Watch for registry changes to Windows theme
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
     }
 
     private void DrawRouteVisualization()
@@ -121,6 +124,9 @@ public sealed partial class TramWidgetContent : UserControl
 
         // Highlight stops based on vehicle position
         UpdateStopHighlights(state.VehiclePosition, vehicleColor);
+
+        // Update text color (config might have changed)
+        UpdateTextColor();
     }
 
     private Color GetVehicleColor(int? delayMinutes)
@@ -206,27 +212,57 @@ public sealed partial class TramWidgetContent : UserControl
         HoverBorder.Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0));
     }
 
-    private void OnColorValuesChanged(UISettings sender, object args)
+    private void OnUserPreferenceChanged(object sender, UserPreferenceChangedEventArgs e)
     {
-        // This event fires on a background thread, dispatch to UI thread
-        DispatcherQueue.TryEnqueue(() => UpdateTextColor());
+        if (e.Category == UserPreferenceCategory.General)
+        {
+            // Dispatch to UI thread
+            DispatcherQueue.TryEnqueue(UpdateTextColor);
+        }
     }
 
     private void UpdateTextColor()
     {
-        var isDarkMode = IsSystemInDarkMode();
-        var textColor = isDarkMode ? Colors.White : Colors.Black;
+        var textColorSetting = _settings.Config.TextColor.ToLowerInvariant();
+
+        Color textColor;
+        if (textColorSetting == "white")
+        {
+            textColor = Colors.White;
+        }
+        else if (textColorSetting == "black")
+        {
+            textColor = Colors.Black;
+        }
+        else // "auto" or any other value
+        {
+            var isDarkMode = IsSystemInDarkMode();
+            textColor = isDarkMode ? Colors.White : Colors.Black;
+        }
+
         ArrivalText.Foreground = new SolidColorBrush(textColor);
     }
 
     private bool IsSystemInDarkMode()
     {
-        // Check the foreground color - in dark mode it's light, in light mode it's dark
-        var foreground = _uiSettings.GetColorValue(UIColorType.Foreground);
+        try
+        {
+            // Check Windows registry for apps theme setting
+            using var key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            var value = key?.GetValue("AppsUseLightTheme");
 
-        // Calculate brightness of the foreground color
-        // If foreground is bright (> 128), system is in dark mode
-        var brightness = (foreground.R + foreground.G + foreground.B) / 3.0;
-        return brightness > 128;
+            if (value is int intValue)
+            {
+                // 0 = dark mode, 1 = light mode
+                return intValue == 0;
+            }
+        }
+        catch
+        {
+            // If registry read fails, fall back to default
+        }
+
+        // Default to dark mode (white text) if detection fails
+        return true;
     }
 }

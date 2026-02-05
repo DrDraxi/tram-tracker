@@ -5,14 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
-## [v1.2.1] - 2026-02-05
+## [v1.3.0] - 2026-02-05
 
 ### Added
-- Automatic text color adaptation based on Windows light/dark mode
+- Automatic text color adaptation based on Windows light/dark mode using registry detection
+- TextColor configuration option with values: "auto" (default), "white", or "black"
 - Real-time theme change detection - text color updates instantly when Windows theme changes
+- Text color automatically updates when config is reloaded
 
 ### Changed
-- Arrival time text now displays in white for dark mode and black for light mode
+- Improved dark mode detection using Windows registry instead of UISettings for better reliability in taskbar context
+- Arrival time text now displays in white for dark mode and black for light mode (when TextColor is "auto")
 
 ## [v1.2.0] - 2026-02-04
 

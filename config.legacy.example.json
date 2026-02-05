@@ -4,5 +4,6 @@
   "Direction": null,
   "RefreshIntervalSeconds": 30,
   "DepartureLimit": 5,
-  "ApiKey": "your_api_key_here"
+  "ApiKey": "your_api_key_here",
+  "TextColor": "auto"
 }

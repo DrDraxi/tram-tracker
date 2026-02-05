@@ -56,7 +56,7 @@ public class TramWidget : IDisposable
         _xamlSource.Initialize(windowId);
         _xamlSource.SiteBridge.ResizePolicy = Microsoft.UI.Content.ContentSizePolicy.ResizeContentToParentWindow;
 
-        _content = new TramWidgetContent();
+        _content = new TramWidgetContent(_settings);
         _content.Clicked += OnWidgetClicked;
 
         var rootGrid = new Microsoft.UI.Xaml.Controls.Grid

@@ -91,9 +91,15 @@ The widget uses `TaskbarInjectionHelper` from the submodule:
   "LineNumber": "12",
   "Direction": "Lehovec",
   "RefreshIntervalSeconds": 30,
-  "DepartureLimit": 10
+  "DepartureLimit": 10,
+  "TextColor": "auto"
 }
 ```
+
+**TextColor options:**
+- `"auto"` - Automatically detects Windows light/dark mode (default)
+- `"white"` - Always use white text
+- `"black"` - Always use black text
 
 ### Environment Variables
 

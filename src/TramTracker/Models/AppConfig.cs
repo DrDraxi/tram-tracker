@@ -11,6 +11,7 @@ public class AppConfig
     public int RefreshIntervalSeconds { get; set; } = 30;
     public int DepartureLimit { get; set; } = 5;
     public string? ApiKey { get; set; } = null;
+    public string TextColor { get; set; } = "auto";  // "auto", "white", or "black"
 
     // NEW: Time-based configuration fields
     public List<TimeWindowConfig>? TimeWindows { get; set; } = null;

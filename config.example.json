@@ -2,6 +2,7 @@
   "ApiKey": "your_api_key_here",
   "RefreshIntervalSeconds": 30,
   "DepartureLimit": 5,
+  "TextColor": "auto",
   "TimeWindows": [
     {
       "StartTime": "10:00",
