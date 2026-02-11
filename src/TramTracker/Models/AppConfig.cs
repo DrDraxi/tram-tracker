@@ -12,6 +12,7 @@ public class AppConfig
     public int DepartureLimit { get; set; } = 5;
     public string? ApiKey { get; set; } = null;
     public string TextColor { get; set; } = "auto";  // "auto", "white", or "black"
+    public bool StartWithWindows { get; set; } = true;
 
     // NEW: Time-based configuration fields
     public List<TimeWindowConfig>? TimeWindows { get; set; } = null;

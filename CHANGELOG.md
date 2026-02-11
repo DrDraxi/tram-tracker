@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v1.4.0] - 2026-02-11
+
+### Added
+- Windows startup support — app can auto-launch on Windows login via registry
+- `startWithWindows` configuration option (default: true)
+
 ## [v1.3.0] - 2026-02-05
 
 ### Added

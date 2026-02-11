@@ -23,6 +23,9 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // Sync startup registry with config
+        StartupService.SyncWithConfig(_settings.Config.StartWithWindows);
+
         // Create hidden window (required for WinUI lifecycle)
         _mainWindow = new MainWindow();
         // Don't call Activate() - keep window hidden
