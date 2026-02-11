@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v1.4.1] - 2026-02-11
+
+### Fixed
+- Startup registry path now updates when app is moved to a new location
+
 ## [v1.4.0] - 2026-02-11
 
 ### Added
