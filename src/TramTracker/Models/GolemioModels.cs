@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace TramTracker.Models;
@@ -48,7 +49,7 @@ public class Trip
 
     // These can be bool, null, or sometimes other types from API - ignore them
     [JsonExtensionData]
-    public Dictionary<string, object>? ExtensionData { get; set; }
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
 public class DepartureTimestamp

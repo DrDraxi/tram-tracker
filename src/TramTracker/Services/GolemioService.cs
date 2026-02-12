@@ -52,7 +52,7 @@ public class GolemioService : IGolemioService
             }
 
             var json = await response.Content.ReadAsStringAsync();
-            var data = JsonSerializer.Deserialize<GolemioResponse>(json);
+            var data = JsonSerializer.Deserialize(json, AppJsonContext.Default.GolemioResponse);
 
             if (data?.Departures == null || data.Departures.Count == 0)
             {

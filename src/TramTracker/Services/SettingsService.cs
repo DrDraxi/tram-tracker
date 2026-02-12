@@ -42,7 +42,7 @@ public class SettingsService
             if (File.Exists(_configFilePath))
             {
                 var json = File.ReadAllText(_configFilePath);
-                var config = JsonSerializer.Deserialize<AppConfig>(json);
+                var config = JsonSerializer.Deserialize(json, AppJsonContext.Default.AppConfig);
 
                 if (config != null)
                 {
@@ -71,8 +71,7 @@ public class SettingsService
         try
         {
             EnsureDataFolder();
-            var options = new JsonSerializerOptions { WriteIndented = true };
-            var json = JsonSerializer.Serialize(Config, options);
+            var json = JsonSerializer.Serialize(Config, AppJsonContext.Default.AppConfig);
             File.WriteAllText(_configFilePath, json);
         }
         catch { }

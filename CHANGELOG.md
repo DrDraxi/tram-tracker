@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Changed
 - Smooth lerp animation when dragging widgets to reorder
 - Smooth animation when neighboring widget resizes (widgets slide instead of snapping)
+- Enabled IL trimming — exe size reduced from 89 MB to ~14 MB
+- Removed unused `System.Drawing.Common` dependency
+- Switched to source-generated JSON serialization (trim-safe)
 
 ### Fixed
 - Right-click no longer ignored on every other rapid click
