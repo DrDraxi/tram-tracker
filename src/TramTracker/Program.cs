@@ -1,7 +1,5 @@
-using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml;
-using System.Threading;
-using WinRT;
+using TramTracker.Services;
+using TramTracker.Widget;
 
 namespace TramTracker;
 
@@ -10,12 +8,14 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        ComWrappersSupport.InitializeComWrappers();
-        Application.Start(p =>
-        {
-            var context = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
-            SynchronizationContext.SetSynchronizationContext(context);
-            _ = new App();
-        });
+        var settings = new SettingsService();
+        var golemioService = new GolemioService(settings);
+
+        StartupService.SyncWithConfig(settings.Config.StartWithWindows);
+
+        var widget = new TramWidget(golemioService, settings);
+        widget.Initialize();
+
+        TaskbarWidget.Widget.RunMessageLoop();
     }
 }

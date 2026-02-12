@@ -1,9 +1,5 @@
-using Microsoft.UI;
-using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Hosting;
-using Microsoft.UI.Xaml.Media;
 using TaskbarWidget;
+using TaskbarWidget.Rendering;
 using TramTracker.Models;
 using TramTracker.Services;
 
@@ -11,95 +7,156 @@ namespace TramTracker.Widget;
 
 public class TramWidget : IDisposable
 {
-    private const string WidgetClassName = "TramTrackerWidget";
-    private const int DefaultWidth = 105;
+    // Route visualization constants (DIP)
+    private const int CanvasWidth = 36;
+    private const int CanvasHeight = 20;
+    private const int StopSpacing = 12;
+    private const int FirstStopX = 6;
+    private const int LineY = 10;
+    private const int StopRadius = 3;
+    private const int VehicleRadius = 4;
+
+    private static readonly Color GreenColor = Color.FromRgb(76, 175, 80);
+    private static readonly Color OrangeColor = Color.FromRgb(255, 152, 0);
+    private static readonly Color RedColor = Color.FromRgb(244, 67, 54);
+    private static readonly Color GrayColor = Color.FromArgb(180, 128, 128, 128);
+    private static readonly Color WhiteColor = Color.FromRgb(255, 255, 255);
+    private static readonly Color YellowBadge = Color.FromRgb(255, 215, 0);
+    private static readonly Color BlackColor = Color.FromRgb(0, 0, 0);
 
     private readonly IGolemioService _service;
     private readonly SettingsService _settings;
-    private readonly DispatcherQueue _dispatcherQueue;
-
-    private TaskbarInjectionHelper? _injectionHelper;
-    private DesktopWindowXamlSource? _xamlSource;
-    private TramWidgetContent? _content;
+    private TaskbarWidget.Widget? _widget;
+    private TramState _state = new();
     private bool _disposed;
 
     public TramWidget(IGolemioService service, SettingsService settings)
     {
         _service = service;
         _settings = settings;
-        _dispatcherQueue = DispatcherQueue.GetForCurrentThread();
-
         _service.StateChanged += OnStateChanged;
     }
 
     public void Initialize()
     {
-        var config = new TaskbarInjectionConfig
-        {
-            ClassName = WidgetClassName,
-            WindowTitle = "TramTracker",
-            WidthDip = DefaultWidth,
-            DeferInjection = true
-        };
+        _state = _service.CurrentState;
 
-        _injectionHelper = new TaskbarInjectionHelper(config);
-        var result = _injectionHelper.Initialize();
-
-        if (!result.Success || result.WindowHandle == IntPtr.Zero)
+        _widget = new TaskbarWidget.Widget("Tram", render: ctx =>
         {
-            System.Diagnostics.Debug.WriteLine("Failed to initialize taskbar injection");
-            return;
+            var state = _state;
+
+            ctx.Horizontal(6, h =>
+            {
+                // Route visualization canvas
+                h.Canvas(CanvasWidth, CanvasHeight, canvas =>
+                {
+                    DrawRoute(canvas, state);
+                });
+
+                // Line number badge
+                h.Panel(p =>
+                {
+                    p.Background(YellowBadge);
+                    p.CornerRadius(2);
+                    p.DrawText(state.LineNumber, new TextStyle
+                    {
+                        FontSizeDip = 11,
+                        FontWeight = 700,
+                        Color = BlackColor
+                    });
+                });
+
+                // Arrival time
+                h.DrawText(state.FormattedArrivalTime, new TextStyle
+                {
+                    FontSizeDip = 13,
+                    FontWeight = 600
+                });
+            });
+
+            ctx.Tooltip(state.TooltipText);
+        });
+
+        _widget.Show();
+
+        // Start refresh timer (30s default)
+        var interval = _settings.Config.RefreshIntervalSeconds;
+        if (interval <= 0) interval = 30;
+        _widget.SetInterval(TimeSpan.FromSeconds(interval), () =>
+        {
+            _ = Task.Run(async () =>
+            {
+                await _service.FetchDeparturesAsync();
+            });
+        });
+
+        // Initial fetch
+        _ = Task.Run(async () =>
+        {
+            await _service.FetchDeparturesAsync();
+        });
+    }
+
+    private void DrawRoute(CanvasContext canvas, TramState state)
+    {
+        var lastStopX = FirstStopX + StopSpacing * 2;
+        var vehicleColor = GetVehicleColor(state.DelayMinutes);
+        var vehicleX = (int)(FirstStopX + state.VehiclePosition * (lastStopX - FirstStopX));
+
+        // Remaining path (gray line)
+        canvas.DrawLine(FirstStopX, LineY, lastStopX, LineY, 2, GrayColor);
+
+        // Traveled path (colored line to vehicle position)
+        if (vehicleX > FirstStopX)
+            canvas.DrawLine(FirstStopX, LineY, vehicleX, LineY, 2, vehicleColor);
+
+        // 3 stop indicators
+        for (int i = 0; i < 3; i++)
+        {
+            var x = FirstStopX + i * StopSpacing;
+            var stopPosition = i / 2.0;
+            var isPassed = state.VehiclePosition > stopPosition + 0.1;
+            var isUserStation = i == 2;
+
+            if (isUserStation)
+            {
+                canvas.DrawCircle(x, LineY, StopRadius, WhiteColor);
+                if (state.VehiclePosition >= 0.95)
+                    canvas.DrawFilledCircle(x, LineY, StopRadius, WhiteColor);
+            }
+            else if (isPassed)
+            {
+                canvas.DrawCircle(x, LineY, StopRadius, GrayColor);
+                canvas.DrawFilledCircle(x, LineY, StopRadius - 1, vehicleColor);
+            }
+            else
+            {
+                canvas.DrawCircle(x, LineY, StopRadius, GrayColor);
+            }
         }
 
-        var windowId = Win32Interop.GetWindowIdFromWindow(result.WindowHandle);
-        _xamlSource = new DesktopWindowXamlSource();
-        _xamlSource.Initialize(windowId);
-        _xamlSource.SiteBridge.ResizePolicy = Microsoft.UI.Content.ContentSizePolicy.ResizeContentToParentWindow;
+        // Vehicle indicator (on top)
+        canvas.DrawFilledCircle(vehicleX, LineY, VehicleRadius, vehicleColor);
+    }
 
-        _content = new TramWidgetContent(_settings);
-        _content.Clicked += OnWidgetClicked;
-
-        var rootGrid = new Microsoft.UI.Xaml.Controls.Grid
-        {
-            Background = new SolidColorBrush(Windows.UI.Color.FromArgb(0, 0, 0, 0))
-        };
-        rootGrid.Children.Add(_content);
-
-        _xamlSource.Content = rootGrid;
-        _injectionHelper.Inject();
-        _injectionHelper.Show();
-
-        // Update with initial state
-        _content.UpdateState(_service.CurrentState);
+    private static Color GetVehicleColor(int? delayMinutes)
+    {
+        if (delayMinutes == null || delayMinutes <= 1) return GreenColor;
+        if (delayMinutes <= 3) return OrangeColor;
+        return RedColor;
     }
 
     private void OnStateChanged(object? sender, TramState state)
     {
-        _dispatcherQueue.TryEnqueue(() =>
-        {
-            _content?.UpdateState(state);
-        });
-    }
-
-    private void OnWidgetClicked(object? sender, EventArgs e)
-    {
-        // Could open a popup with more details, or trigger a refresh
-        System.Diagnostics.Debug.WriteLine("Widget clicked");
+        _state = state;
+        _widget?.Invalidate();
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-
         _service.StateChanged -= OnStateChanged;
-
-        if (_content != null)
-        {
-            _content.Clicked -= OnWidgetClicked;
-        }
-
-        _xamlSource?.Dispose();
-        _injectionHelper?.Dispose();
+        _widget?.Dispose();
     }
 }
