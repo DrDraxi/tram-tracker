@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Prague Tram Tracker is a Windows taskbar widget that displays real-time Prague public transport arrival times using the Golemio API. It shows a visual route with vehicle position, line number badge, and minutes to arrival.
+Prague Tram Tracker is a Windows taskbar widget that displays real-time Prague public transport arrival times using the Golemio API. It shows a visual route with vehicle position, line number badge, and minutes to arrival. Uses pure Win32 GDI rendering via the TaskbarWidget submodule.
 
 ## Build Commands
 
@@ -26,8 +26,8 @@ dotnet publish src/TramTracker/TramTracker.csproj --configuration Release --runt
 
 ### Solution Structure
 
-- **TramTracker** (`src/TramTracker/`) - WinUI 3 app with taskbar widget
-- **TaskbarWidget** (`lib/taskbar-widget/`) - Git submodule for taskbar widget injection
+- **TramTracker** (`src/TramTracker/`) - Win32 GDI app with taskbar widget
+- **TaskbarWidget** (`lib/taskbar-widget/`) - Git submodule for immediate-mode GDI widget toolkit
 
 After cloning, initialize the submodule:
 ```bash
@@ -38,68 +38,44 @@ git submodule update --init --recursive
 
 ```
 src/TramTracker/
-├── Program.cs              # Entry point with ComWrappers init
-├── App.xaml.cs             # Creates widget, starts polling timer
-├── MainWindow.xaml.cs      # Hidden window (WinUI lifecycle requirement)
+├── Program.cs              # Entry point, creates services, runs message loop
 ├── Widget/
-│   ├── TramWidget.cs              # Injection orchestrator
-│   └── TramWidgetContent.xaml     # Visual UI with route visualization
+│   └── TramWidget.cs       # Render callback with route visualization + canvas drawing
 ├── Services/
 │   ├── IGolemioService.cs         # Interface for API operations
-│   ├── GolemioService.cs          # Golemio API client
-│   ├── SettingsService.cs         # Config persistence
-│   └── EnvService.cs              # .env file loading for API key
+│   ├── GolemioService.cs          # Golemio API client with state change events
+│   ├── SettingsService.cs         # Config persistence (%LOCALAPPDATA%\TramTracker\)
+│   ├── EnvService.cs              # .env file loading for API key
+│   └── StartupService.cs          # Windows startup registry
 └── Models/
-    ├── AppConfig.cs               # Configuration model
+    ├── AppConfig.cs               # Configuration with time-based window support
     ├── GolemioModels.cs           # API response models
-    └── TramState.cs               # Widget state model
+    ├── TramState.cs               # Widget state (vehicle position, arrival, tooltip)
+    ├── TimeWindowConfig.cs        # Time-of-day route switching
+    └── TrackingConfig.cs          # Station/line/direction tuple
 ```
 
 ### Widget System
 
-The widget uses `TaskbarInjectionHelper` from the submodule:
-1. Creates a host window with `DeferInjection=true`
-2. Sets up `DesktopWindowXamlSource` for WinUI content
-3. Injects into taskbar after XAML setup
-4. Displays route visualization with vehicle position
+TramWidget uses the `TaskbarWidget.Widget` API (immediate-mode Win32 GDI):
+1. Creates `new Widget("Tram", render: ctx => { ... })` with a render callback
+2. Render callback draws route canvas, line badge, and arrival time using `ctx.Horizontal()`, `ctx.Canvas()`, `ctx.Panel()`
+3. `widget.Show()` handles taskbar injection and positioning
+4. `widget.SetInterval()` triggers periodic API fetches
+5. `widget.Invalidate()` re-renders when `GolemioService.StateChanged` fires
+6. `Widget.RunMessageLoop()` runs the Win32 message loop
 
-### Visual Elements
+### Time-Based Configuration
 
-- 3 stop indicators (gray circles) connected by line
-- Moving vehicle indicator (green/orange/red based on delay)
-- Traveled path painted green behind vehicle
-- User's station (rightmost) highlighted white
-- Line number badge (yellow)
-- Arrival time in minutes
-
-### Services
-
-- **GolemioService**: Fetches departures from Golemio API
-- **SettingsService**: Loads/saves config.json
-- **EnvService**: Loads API key from .env file
+Config supports time windows that switch station/line/direction by time of day:
+- `TimeWindows` array with `StartTime`/`EndTime` (24h format, supports midnight crossing)
+- `DefaultConfig` fallback when no window matches
+- Legacy flat fields still work when `TimeWindows` is null
 
 ### Data Storage
 
 - Config: `%LOCALAPPDATA%\TramTracker\config.json`
-- API Key: `.env` file in app directory (gitignored)
-
-### Configuration Options
-
-```json
-{
-  "StationName": "Chotkovy sady",
-  "LineNumber": "12",
-  "Direction": "Lehovec",
-  "RefreshIntervalSeconds": 30,
-  "DepartureLimit": 10,
-  "TextColor": "auto"
-}
-```
-
-**TextColor options:**
-- `"auto"` - Automatically detects Windows light/dark mode (default)
-- `"white"` - Always use white text
-- `"black"` - Always use black text
+- API Key: `.env` file in app directory (gitignored) or `ApiKey` field in config
 
 ### Environment Variables
 
@@ -112,10 +88,10 @@ Get your API key from: https://api.golemio.cz/
 
 ## Gotchas
 
-- **Platform required**: WinUI 3 requires explicit platform. Use `-p:Platform=x64` for all commands.
-- **Hidden MainWindow**: Don't call `Activate()` on MainWindow - it must stay hidden for widget-only mode.
+- **Platform required**: Use `-p:Platform=x64` for all build commands.
 - **Submodule**: Must initialize submodule before building.
-- **API Key**: Must have valid Golemio API key in .env file.
+- **API Key**: Must have valid Golemio API key in .env file or config.
+- **Config hot-reload**: `SettingsService.LoadConfig()` is called on every fetch cycle, so config changes apply without restart.
 
 ## Releases
 
