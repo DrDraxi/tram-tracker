@@ -56,22 +56,17 @@ public class TramWidget : IDisposable
                 // Line number badge
                 h.Panel(p =>
                 {
+                    p.Size(18, 18);
                     p.Background(YellowBadge);
-                    p.CornerRadius(2);
+                    p.CornerRadius(3);
                     p.DrawText(state.LineNumber, new TextStyle
                     {
-                        FontSizeDip = 11,
-                        FontWeight = 700,
                         Color = BlackColor
                     });
                 });
 
                 // Arrival time
-                h.DrawText(state.FormattedArrivalTime, new TextStyle
-                {
-                    FontSizeDip = 13,
-                    FontWeight = 600
-                });
+                h.DrawText(state.FormattedArrivalTime);
             });
 
             ctx.Tooltip(state.TooltipText);

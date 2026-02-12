@@ -47,7 +47,7 @@ public class GolemioService : IGolemioService
 
             if (!response.IsSuccessStatusCode)
             {
-                UpdateState(TramState.Error($"API error: {response.StatusCode}"));
+                UpdateState(TramState.Error($"API error: {response.StatusCode}\n{url}"));
                 return;
             }
 
