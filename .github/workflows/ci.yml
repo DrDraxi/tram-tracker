@@ -30,10 +30,10 @@ jobs:
           echo "VERSION=$version" >> $env:GITHUB_OUTPUT
           Write-Host "Version: $version"
 
-      - name: Setup .NET 8
+      - name: Setup .NET 10
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Restore dependencies
         run: dotnet restore TramTracker.sln
@@ -41,16 +41,15 @@ jobs:
       - name: Build (Debug)
         run: dotnet build TramTracker.sln --configuration Debug --no-restore
 
-      - name: Publish Single File (Release x64)
+      - name: Test
+        run: dotnet test src/TramTracker.Tests/TramTracker.Tests.csproj --configuration Debug --no-restore -p:Platform=x64
+
+      - name: Publish NativeAOT exe (Release x64)
         run: |
           dotnet publish src/TramTracker/TramTracker.csproj `
             --configuration Release `
             --runtime ${{ env.RID }} `
-            --self-contained true `
             -p:Platform=${{ env.PLATFORM }} `
-            -p:PublishSingleFile=true `
-            -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:WindowsPackageType=None `
             -p:Version=${{ steps.version.outputs.VERSION }} `
             -o publish/${{ env.RID }}
 

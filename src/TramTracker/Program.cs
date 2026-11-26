@@ -1,21 +1,13 @@
-using TramTracker.Services;
-using TramTracker.Widget;
+using TaskbarWidget;
 
 namespace TramTracker;
 
 public static class Program
 {
     [STAThread]
-    public static void Main(string[] args)
+    public static void Main()
     {
-        var settings = new SettingsService();
-        var golemioService = new GolemioService(settings);
-
-        StartupService.SyncWithConfig(settings.Config.StartWithWindows);
-
-        var widget = new TramWidget(golemioService, settings);
-        widget.Initialize();
-
-        TaskbarWidget.Widget.RunMessageLoop();
+        new TramApp().Start();
+        Widget.Run();
     }
 }

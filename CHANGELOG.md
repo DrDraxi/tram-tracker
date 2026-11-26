@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v3.0.0] - 2026-11-26
+
+### Changed
+- Complete rewrite on the new TaskbarWidget library: native AOT exe built on .NET 10 (~2 MB instead of ~14 MB, roughly a third of the memory, zero idle CPU)
+- Modern Windows 11 look: Direct2D anti-aliased rendering, line badge, live countdown with delay, route track with a gliding vehicle dot, hover pill and fade-in tooltips
+- Countdown is recomputed every few seconds from the departure time instead of only on each fetch
+- Requests more departures when filtering by line/direction, so busy stops no longer report "no match"
+
+### Added
+- Right-click menu: Refresh now, Edit settings, Start with Windows, Exit
+- Time windows accept an optional `Days` filter (`"Mon-Fri"`, `"weekends"`, …)
+- Tests for the config and time-window logic
+- Click the widget to refresh immediately; refreshes after waking from sleep
+- Falls back to the scheduled time when a departure has no live prediction (previously showed "--")
+- Keeps counting down on the last good data when a single fetch fails
+
+### Fixed
+- Widget could jump to the top of the screen (explorer restart, display/DPI change, auto-hide taskbar)
+- Widgets could swap places or leave gaps "randomly" when several widgets were running
+- Widget hid itself when clicking the desktop
+- Widget never appeared if Windows started it before the taskbar existed
+
 ## [v2.0.4] - 2026-02-17
 
 ### Fixed

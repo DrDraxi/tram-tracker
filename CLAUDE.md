@@ -4,85 +4,60 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Prague Tram Tracker is a Windows taskbar widget that displays real-time Prague public transport arrival times using the Golemio API. It shows a visual route with vehicle position, line number badge, and minutes to arrival. Uses pure Win32 GDI rendering via the TaskbarWidget submodule.
+Prague Tram Tracker is a Windows taskbar widget that displays real-time Prague public transport arrival times using the Golemio API. It shows a visual route with vehicle position, line number badge, and minutes to arrival. Rendered with Direct2D via the TaskbarWidget submodule and published as a NativeAOT exe.
 
 ## Build Commands
 
 ```bash
-# Build the solution
+# Build / run (JIT, fast iteration)
 dotnet build -p:Platform=x64
-
-# Build release
-dotnet build --configuration Release -p:Platform=x64
-
-# Run the app (x64)
 dotnet run --project src/TramTracker/TramTracker.csproj -p:Platform=x64
 
-# Publish single-file exe (x64)
-dotnet publish src/TramTracker/TramTracker.csproj --configuration Release --runtime win-x64 --self-contained true -p:Platform=x64 -p:PublishSingleFile=true -p:WindowsPackageType=None -o publish
+# Publish the release exe: NativeAOT, single ~2 MB native file
+# (needs the VS "Desktop development with C++" workload; vswhere.exe must be on PATH)
+dotnet publish src/TramTracker/TramTracker.csproj -c Release -r win-x64 -p:Platform=x64 -o publish
+
+# Build against a local taskbar-widget checkout instead of the submodule
+dotnet build src/TramTracker/TramTracker.csproj -p:Platform=x64 -p:TaskbarWidgetDir=../taskbar-widget
 ```
 
 ## Architecture
 
-### Solution Structure
-
-- **TramTracker** (`src/TramTracker/`) - Win32 GDI app with taskbar widget
-- **TaskbarWidget** (`lib/taskbar-widget/`) - Git submodule for immediate-mode GDI widget toolkit
+- **TramTracker** (`src/TramTracker/`): the widget app, .NET 10 NativeAOT
+- **TaskbarWidget** (`lib/taskbar-widget/`): git submodule. Direct2D-rendered taskbar widget toolkit with shared, deterministic cross-widget positioning
 
 After cloning, initialize the submodule:
 ```bash
 git submodule update --init --recursive
 ```
 
-### Key Components
-
 ```
 src/TramTracker/
-├── Program.cs              # Entry point, creates services, runs message loop
-├── Widget/
-│   └── TramWidget.cs       # Render callback with route visualization + canvas drawing
-├── Services/
-│   ├── IGolemioService.cs         # Interface for API operations
-│   ├── GolemioService.cs          # Golemio API client with state change events
-│   ├── SettingsService.cs         # Config persistence (%LOCALAPPDATA%\TramTracker\)
-│   ├── EnvService.cs              # .env file loading for API key
-│   └── StartupService.cs          # Windows startup registry
-└── Models/
-    ├── AppConfig.cs               # Configuration with time-based window support
-    ├── GolemioModels.cs           # API response models
-    ├── TramState.cs               # Widget state (vehicle position, arrival, tooltip)
-    ├── TimeWindowConfig.cs        # Time-of-day route switching
-    └── TrackingConfig.cs          # Station/line/direction tuple
+├── Program.cs      # Entry point: TramApp.Start() + Widget.Run()
+├── TramApp.cs      # Widget UI (badge, countdown, route track, tooltip, menu), refresh scheduling
+├── Departures.cs   # Golemio fetch (WinHTTP via TaskbarWidget.Http) + JSON parsing → immutable TramState
+└── TramConfig.cs   # config.json (case-insensitive), time windows, API key lookup
 ```
 
-### Widget System
-
-TramWidget uses the `TaskbarWidget.Widget` API (immediate-mode Win32 GDI):
-1. Creates `new Widget("Tram", render: ctx => { ... })` with a render callback
-2. Render callback draws route canvas, line badge, and arrival time using `ctx.Horizontal()`, `ctx.Canvas()`, `ctx.Panel()`
-3. `widget.Show()` handles taskbar injection and positioning
-4. `widget.SetInterval()` triggers periodic API fetches
-5. `widget.Invalidate()` re-renders when `GolemioService.StateChanged` fires
-6. `Widget.RunMessageLoop()` runs the Win32 message loop
+- Fetches run on the thread pool and post an immutable `TramState` back to the UI thread (`widget.Post`).
+- The countdown and vehicle position are computed at render time from the departure timestamp, with a repaint every 5 s.
+- A failed fetch keeps the last good data, and the error is shown in the tooltip.
 
 ### Time-Based Configuration
 
 Config supports time windows that switch station/line/direction by time of day:
 - `TimeWindows` array with `StartTime`/`EndTime` (24h format, supports midnight crossing)
+- Optional `Days` per window: `"Mon-Fri"`, `"Sat,Sun"`, `"weekdays"`, `"weekends"` or an array of those
+- The first matching window wins, so a weekday-only window can sit above an every-day one for the same hours
 - `DefaultConfig` fallback when no window matches
 - Legacy flat fields still work when `TimeWindows` is null
+- Other keys: `ApiKey`, `RefreshIntervalSeconds` (10–3600), `DepartureLimit`, `TextColor` (`auto`/`white`/`black`), `StartWithWindows`
 
 ### Data Storage
 
-- Config: `%LOCALAPPDATA%\TramTracker\config.json`
-- API Key: `.env` file in app directory (gitignored) or `ApiKey` field in config
-
-### Environment Variables
-
-Create a `.env` file with your Golemio API key:
-```
-GOLEMIO_API_KEY=your_api_key_here
-```
+- Config: `%LOCALAPPDATA%\TramTracker\config.json` (re-read before every fetch)
+- API Key: `GOLEMIO_API_KEY` in a `.env` file next to the exe or in the working directory, or `ApiKey` in config
+- Logs: `%LOCALAPPDATA%\TaskbarWidget\logs\Tram.log` (set `TASKBARWIDGET_LOG=1` for verbose)
 
 Get your API key from: https://api.golemio.cz/
 
@@ -91,7 +66,8 @@ Get your API key from: https://api.golemio.cz/
 - **Platform required**: Use `-p:Platform=x64` for all build commands.
 - **Submodule**: Must initialize submodule before building.
 - **API Key**: Must have valid Golemio API key in .env file or config.
-- **Config hot-reload**: `SettingsService.LoadConfig()` is called on every fetch cycle, so config changes apply without restart.
+- **Config hot-reload**: `TramConfig.Reload()` runs before every fetch, so config changes apply without restart.
+- **NativeAOT**: no reflection-based JSON. Parse with `JsonDocument`/`JsonNode`.
 
 ## Releases
 
@@ -157,7 +133,7 @@ Follow [Semantic Versioning](https://semver.org/):
   - Uploads portable exe artifact
 
 - **Release** (`.github/workflows/release.yml`): Runs on version tags
-  - Builds single-file exe and zip
+  - Builds the NativeAOT exe and zip
   - Extracts changelog notes
   - Creates GitHub release with artifacts
 
