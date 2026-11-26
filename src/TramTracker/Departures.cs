@@ -3,7 +3,7 @@ using TaskbarWidget;
 
 namespace TramTracker;
 
-public sealed record Departure(string Line, string Headsign, string? Platform, DateTimeOffset Time, int? DelayMinutes);
+public sealed record Departure(string Line, string Headsign, string? Platform, string? StopId, DateTimeOffset Time, int? DelayMinutes);
 
 /// <summary>Immutable snapshot of what the widget shows. Countdown values are computed at render time.</summary>
 public sealed record TramState(
@@ -14,9 +14,12 @@ public sealed record TramState(
 {
     public static TramState Loading(Tracking t) => new(t, Array.Empty<Departure>(), null, null);
 
-    /// <summary>Departures that haven't left yet (a tram counts as "here" until ~20 s after its time).</summary>
+    /// <summary>
+    /// Departures you can still catch: at least <see cref="Tracking.MinMinutes"/> away (without a minimum,
+    /// a tram counts as "here" until ~20 s after its time).
+    /// </summary>
     public IEnumerable<Departure> Remaining(DateTimeOffset now) =>
-        Upcoming.Where(d => d.Time > now.AddSeconds(-20));
+        Upcoming.Where(d => Tracking.MinMinutes > 0 ? d.Time >= now.AddMinutes(Tracking.MinMinutes) : d.Time > now.AddSeconds(-20));
 }
 
 /// <summary>Golemio PID departure boards (https://api.golemio.cz/).</summary>
@@ -24,56 +27,111 @@ public static class Golemio
 {
     const string BaseUrl = "https://api.golemio.cz/v2/pid/departureboards/";
 
+    // The API returns at most 100 departures and has no line filter. At a big stop like Karlovo náměstí
+    // 100 departures (all lines, all platforms) span only ~25 minutes, so a tram 30 minutes out was "not found".
+    // A single platform's board spans ~2 hours, so we find the platform the tracked line leaves from and
+    // query just that one (one request per refresh once known).
+    static readonly Dictionary<Tracking, string[]> KnownPlatforms = new();
+    static readonly object Gate = new();
+
     /// <summary>Blocking fetch — call from a background thread.</summary>
     public static TramState Fetch(string? apiKey, Tracking tracking, int limit)
     {
         if (string.IsNullOrEmpty(apiKey))
-            return new TramState(tracking, Array.Empty<Departure>(), null,
-                "No Golemio API key. Add GOLEMIO_API_KEY to a .env file next to the exe, or \"ApiKey\" to config.json.");
+            return Fail(tracking, "No Golemio API key. Add GOLEMIO_API_KEY to a .env file next to the exe, or \"ApiKey\" to config.json.");
 
-        // Busy stops serve many lines; ask for enough departures that the tracked line is in the list
-        // (the old default of 5 regularly produced "no match" at stations like Malostranská).
-        int effectiveLimit = string.IsNullOrEmpty(tracking.Line) && string.IsNullOrEmpty(tracking.Direction) ? limit : Math.Max(limit, 40);
-        var url = $"{BaseUrl}?names={Uri.EscapeDataString(tracking.Station)}&limit={effectiveLimit}&preferredTimezone=Europe%2FPrague";
+        var headers = new Dictionary<string, string> { ["x-access-token"] = apiKey };
+        string byName = "names=" + Uri.EscapeDataString(tracking.Station);
+        bool filtered = !string.IsNullOrEmpty(tracking.Line) || !string.IsNullOrEmpty(tracking.Direction);
 
-        HttpResult res;
-        try
+        if (!filtered)
         {
-            res = Http.Get(url, new Dictionary<string, string> { ["x-access-token"] = apiKey });
-        }
-        catch (Exception ex)
-        {
-            return new TramState(tracking, Array.Empty<Departure>(), null, ex.Message);
+            var (any, err) = Board(headers, byName, Math.Clamp(limit, 10, 100), 120);
+            if (err != null) return Fail(tracking, err);
+            return any.Count == 0
+                ? new TramState(tracking, any, DateTime.Now, $"No departures from {tracking.Station} right now")
+                : new TramState(tracking, any.OrderBy(d => d.Time).Take(12).ToList(), DateTime.Now, null);
         }
 
-        if (res.Status is 401 or 403) return new TramState(tracking, Array.Empty<Departure>(), null, "Golemio rejected the API key (HTTP " + res.Status + ")");
-        if (res.Status == 404) return new TramState(tracking, Array.Empty<Departure>(), null, $"Stop \"{tracking.Station}\" not found");
-        if (!res.IsSuccess) return new TramState(tracking, Array.Empty<Departure>(), null, $"Golemio API error (HTTP {res.Status})");
+        var key = tracking with { MinMinutes = 0 };
+        string[]? known;
+        lock (Gate) KnownPlatforms.TryGetValue(key, out known);
 
-        List<Departure> all;
-        try { all = Parse(res.Body); }
-        catch (Exception ex) { return new TramState(tracking, Array.Empty<Departure>(), null, "Unexpected API response: " + ex.Message); }
-
-        var matching = all.Where(d =>
-                (string.IsNullOrEmpty(tracking.Line) || d.Line.Equals(tracking.Line, StringComparison.OrdinalIgnoreCase)) &&
-                (string.IsNullOrEmpty(tracking.Direction) || d.Headsign.Contains(tracking.Direction, StringComparison.OrdinalIgnoreCase)))
-            .OrderBy(d => d.Time)
-            .Take(4)
-            .ToList();
-
-        if (matching.Count == 0)
+        // 1. The platform this line/direction left from last time.
+        if (known != null)
         {
-            if (all.Count == 0) return new TramState(tracking, matching, DateTime.Now, $"No departures from {tracking.Station} right now");
-            var wanted = string.Join(", ", new[]
+            var (deps, err) = Board(headers, Ids(known), 100, 180);
+            if (err != null) return Fail(tracking, err);
+            var m = Match(deps, tracking);
+            if (m.Count > 0) return Ok(tracking, m);
+        }
+
+        // 2. The whole station: finds the platform whenever the line is due in the next ~25 minutes.
+        var (all, err2) = Board(headers, byName, 100, 120);
+        if (err2 != null) return Fail(tracking, err2);
+        var matches = Match(all, tracking);
+        if (matches.Count > 0)
+        {
+            var ids = matches.Select(d => d.StopId).OfType<string>().Distinct().ToArray();
+            if (ids.Length > 0)
             {
-                tracking.Line is { Length: > 0 } l ? $"line {l}" : null,
-                tracking.Direction is { Length: > 0 } dir ? $"towards \"{dir}\"" : null,
-            }.Where(s => s != null));
-            var available = string.Join(", ", all.Select(d => $"{d.Line} → {d.Headsign}").Distinct().Take(6));
-            return new TramState(tracking, matching, DateTime.Now, $"Nothing matches {wanted} at {tracking.Station}.\nAvailable: {available}");
+                lock (Gate) KnownPlatforms[key] = ids;
+                var (deps, err3) = Board(headers, Ids(ids), 100, 180);   // longer lookahead for "then in …"
+                if (err3 == null && Match(deps, tracking) is { Count: > 0 } longer) return Ok(tracking, longer);
+            }
+            return Ok(tracking, matches);
         }
 
-        return new TramState(tracking, matching, DateTime.Now, null);
+        // 3. Nothing due soon: try the station's platforms one by one (once — the hit is remembered).
+        foreach (var id in all.Select(d => d.StopId).OfType<string>().Distinct().Where(id => known == null || !known.Contains(id)).Take(10))
+        {
+            Thread.Sleep(150); // stay well under the API rate limit
+            var (deps, err) = Board(headers, Ids(new[] { id }), 100, 180);
+            if (err != null) continue;
+            var m = Match(deps, tracking);
+            if (m.Count > 0)
+            {
+                lock (Gate) KnownPlatforms[key] = new[] { id };
+                return Ok(tracking, m);
+            }
+        }
+
+        if (all.Count == 0) return new TramState(tracking, Array.Empty<Departure>(), DateTime.Now, $"No departures from {tracking.Station} right now");
+        var wanted = string.Join(", ", new[]
+        {
+            tracking.Line is { Length: > 0 } l ? $"line {l}" : null,
+            tracking.Direction is { Length: > 0 } dir ? $"towards \"{dir}\"" : null,
+        }.Where(s => s != null));
+        var available = string.Join(", ", all.Select(d => $"{d.Line} → {d.Headsign}").Distinct().Take(6));
+        return new TramState(tracking, Array.Empty<Departure>(), DateTime.Now,
+            $"No {wanted} from {tracking.Station} in the next 3 hours.\nAvailable now: {available}");
+    }
+
+    static TramState Ok(Tracking t, List<Departure> deps) => new(t, deps, DateTime.Now, null);
+    static TramState Fail(Tracking t, string error) => new(t, Array.Empty<Departure>(), null, error);
+
+    static string Ids(IEnumerable<string> ids) => string.Join("&", ids.Select(i => "ids=" + Uri.EscapeDataString(i)));
+
+    static List<Departure> Match(List<Departure> deps, Tracking t) => deps
+        .Where(d => (string.IsNullOrEmpty(t.Line) || d.Line.Equals(t.Line, StringComparison.OrdinalIgnoreCase)) &&
+                    (string.IsNullOrEmpty(t.Direction) || d.Headsign.Contains(t.Direction, StringComparison.OrdinalIgnoreCase)))
+        .OrderBy(d => d.Time)
+        .Take(12) // enough to skip the ones closer than MinMinutes and still show "then in …"
+        .ToList();
+
+    static (List<Departure> Departures, string? Error) Board(Dictionary<string, string> headers, string selector, int limit, int minutesAfter)
+    {
+        var url = $"{BaseUrl}?{selector}&limit={limit}&minutesAfter={minutesAfter}&preferredTimezone=Europe%2FPrague";
+        HttpResult res;
+        try { res = Http.Get(url, headers); }
+        catch (Exception ex) { return (new List<Departure>(), ex.Message); }
+
+        if (res.Status is 401 or 403) return (new List<Departure>(), $"Golemio rejected the API key (HTTP {res.Status})");
+        if (res.Status == 404) return (new List<Departure>(), "Stop not found");
+        if (res.Status == 429) return (new List<Departure>(), "Golemio rate limit hit, retrying shortly");
+        if (!res.IsSuccess) return (new List<Departure>(), $"Golemio API error (HTTP {res.Status})");
+        try { return (Parse(res.Body), null); }
+        catch (Exception ex) { return (new List<Departure>(), "Unexpected API response: " + ex.Message); }
     }
 
     static List<Departure> Parse(byte[] json)
@@ -87,6 +145,7 @@ public static class Golemio
             string line = Get(d, "route", "short_name") ?? "?";
             string headsign = Get(d, "trip", "headsign") ?? "";
             string? platform = Get(d, "stop", "platform_code");
+            string? stopId = Get(d, "stop", "id");
 
             // Predicted time when the vehicle is tracked, scheduled otherwise (the old widget showed "--"
             // for untracked departures even though a scheduled time was available).
@@ -100,7 +159,7 @@ public static class Golemio
                 && dl.TryGetProperty("minutes", out var m) && m.ValueKind == JsonValueKind.Number)
                 delay = m.GetInt32();
 
-            list.Add(new Departure(line, headsign, platform, time.Value, delay));
+            list.Add(new Departure(line, headsign, platform, stopId, time.Value, delay));
         }
         return list;
     }

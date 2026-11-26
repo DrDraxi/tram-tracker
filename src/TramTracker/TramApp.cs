@@ -109,7 +109,9 @@ public sealed class TramApp
         Color status = !hasData ? theme.TextTertiary
             : dep!.DelayMinutes is null or <= 1 ? theme.Success
             : dep.DelayMinutes <= 3 ? theme.Caution : theme.Critical;
-        float progress = hasData ? Progress(minutes) : 0;
+        // With a minimum (walking time), the track counts down to "leave now": the dot reaches your stop
+        // when the tram is exactly MinMinutes away.
+        float progress = hasData ? Progress(minutes - _state.Tracking.MinMinutes) : 0;
 
         // Line badge
         string line = dep?.Line ?? _state.Tracking.Line ?? "–";
@@ -199,6 +201,7 @@ public sealed class TramApp
                 var nm = Math.Max(0, (int)(next.Time - now).TotalMinutes);
                 lines.Add($"Then in {nm} min, at {next.Time.ToLocalTime():HH:mm}");
             }
+            if (t.MinMinutes > 0) lines.Add($"Showing trams at least {t.MinMinutes} min away");
         }
 
         if (_lastError != null) lines.Add($"Last update failed: {_lastError}");

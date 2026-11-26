@@ -75,6 +75,34 @@ public sealed class TramConfigTests : IDisposable
         Assert.Equal(expected, TramConfig.OnDay(JsonValue.Create(days), day));
 
     [Fact]
+    public void MinMinutesIsReadPerWindowAndDefaultsToZero()
+    {
+        var cfg = Write("""
+        {
+          "TimeWindows": [ { "StartTime": "16:00", "EndTime": "18:10", "StationName": "Karlovo náměstí", "LineNumber": "3", "MinMinutes": 5 } ],
+          "DefaultConfig": { "StationName": "Jiráskovo náměstí", "LineNumber": "17", "MinMinutes": 10 }
+        }
+        """);
+        Assert.Equal(5, cfg.Active(DateTime.Parse("2026-11-27 17:00")).MinMinutes);
+        Assert.Equal(10, cfg.Active(DateTime.Parse("2026-11-27 20:00")).MinMinutes);
+        Assert.Equal(0, Write("""{ "StationName": "Kobylisy" }""").Active(DateTime.Now).MinMinutes);
+    }
+
+    [Fact]
+    public void RemainingSkipsTramsCloserThanMinMinutes()
+    {
+        var now = DateTimeOffset.Parse("2026-11-27T17:00:00+01:00");
+        Departure At(int min) => new("3", "Sídliště Modřany", "B", "U237Z2P", now.AddMinutes(min), 0);
+        var deps = new[] { At(-1), At(2), At(4), At(5), At(9) };
+
+        var walk5 = new TramState(new Tracking("Karlovo náměstí", "3", "Modřany", 5), deps, DateTime.Now, null);
+        Assert.Equal(new[] { 5.0, 9.0 }, walk5.Remaining(now).Select(d => (d.Time - now).TotalMinutes));
+
+        var noMin = new TramState(new Tracking("Karlovo náměstí", "3", "Modřany"), deps, DateTime.Now, null);
+        Assert.Equal(4, noMin.Remaining(now).Count()); // the one that left a minute ago is gone
+    }
+
+    [Fact]
     public void DayFilterAcceptsArrays() =>
         Assert.True(TramConfig.OnDay(new JsonArray("Mon", "Wed-Thu"), DayOfWeek.Thursday));
 }

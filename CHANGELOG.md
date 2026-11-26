@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v3.1.0] - 2026-11-26
+
+### Added
+- `MinMinutes` per time window (or flat config / `DefaultConfig`): skip trams you can't make it to, e.g. `"MinMinutes": 5` for a 5-minute walk. The route track then counts down to "leave now"
+
+### Fixed
+- Trams more than ~10–25 minutes away weren't found at busy stops (e.g. Karlovo náměstí): the API returns at most 100 departures for the whole station. The widget now finds the platform the tracked line leaves from and queries just that platform (~2 hours ahead, still one request per refresh)
+
 ## [v3.0.0] - 2026-11-26
 
 ### Changed

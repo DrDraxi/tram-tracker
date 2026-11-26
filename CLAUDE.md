@@ -40,6 +40,7 @@ src/TramTracker/
 ```
 
 - Fetches run on the thread pool and post an immutable `TramState` back to the UI thread (`widget.Post`).
+- Golemio returns at most 100 departures and has no line filter, so `Golemio.Fetch` finds the platform (stop id) the tracked line leaves from (station board, then platform-by-platform) and then queries only that platform (`ids=`), which covers ~2 hours.
 - The countdown and vehicle position are computed at render time from the departure timestamp, with a repaint every 5 s.
 - A failed fetch keeps the last good data, and the error is shown in the tooltip.
 
@@ -47,6 +48,7 @@ src/TramTracker/
 
 Config supports time windows that switch station/line/direction by time of day:
 - `TimeWindows` array with `StartTime`/`EndTime` (24h format, supports midnight crossing)
+- Optional `MinMinutes` per window / `DefaultConfig`: hide trams closer than that (walking time); the track counts down to "leave now"
 - Optional `Days` per window: `"Mon-Fri"`, `"Sat,Sun"`, `"weekdays"`, `"weekends"` or an array of those
 - The first matching window wins, so a weekday-only window can sit above an every-day one for the same hours
 - `DefaultConfig` fallback when no window matches

@@ -3,8 +3,8 @@ using TaskbarWidget;
 
 namespace TramTracker;
 
-/// <summary>Which stop / line / direction to track.</summary>
-public sealed record Tracking(string Station, string? Line, string? Direction);
+/// <summary>Which stop / line / direction to track, and how far away a tram must be to be worth showing.</summary>
+public sealed record Tracking(string Station, string? Line, string? Direction, int MinMinutes = 0);
 
 /// <summary>
 /// %LOCALAPPDATA%\TramTracker\config.json — same file and format as previous versions:
@@ -102,7 +102,9 @@ public sealed class TramConfig
     static Tracking Read(JsonObject o) => new(
         JsonConfig.Str(JsonConfig.Find(o, "StationName")) ?? "Kobylisy",
         JsonConfig.Str(JsonConfig.Find(o, "LineNumber")),
-        JsonConfig.Str(JsonConfig.Find(o, "Direction")));
+        JsonConfig.Str(JsonConfig.Find(o, "Direction")),
+        // Skip trams you can't make it to (e.g. the walk to the stop takes 5 minutes).
+        Math.Clamp(JsonConfig.Int(JsonConfig.Find(o, "MinMinutes")) ?? 0, 0, 120));
 
     void WriteDefault()
     {
